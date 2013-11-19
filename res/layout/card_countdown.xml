@@ -14,8 +14,17 @@
      limitations under the License.
 -->
 
-<resources>
-    <string name="app_name">StopWatch</string>
-    <string name="start_stopwatch">start a stopwatch</string>
-    <string name="stop">Stop</string>
-</resources>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/black" >
+    <TextView
+        android:id="@+id/seconds_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center"
+        android:layout_marginTop="-10px"
+        android:textSize="160px"
+        android:gravity="center" />
+</FrameLayout>

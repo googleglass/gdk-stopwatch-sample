@@ -14,8 +14,4 @@
      limitations under the License.
 -->
 
-<resources>
-    <string name="app_name">StopWatch</string>
-    <string name="start_stopwatch">start a stopwatch</string>
-    <string name="stop">Stop</string>
-</resources>
+<trigger keyword="@string/start_stopwatch" />
