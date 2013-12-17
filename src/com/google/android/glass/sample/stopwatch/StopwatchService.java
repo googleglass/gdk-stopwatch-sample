@@ -17,6 +17,7 @@
 package com.google.android.glass.sample.stopwatch;
 
 import com.google.android.glass.timeline.LiveCard;
+import com.google.android.glass.timeline.LiveCard.PublishMode;
 import com.google.android.glass.timeline.TimelineManager;
 
 import android.app.PendingIntent;
@@ -31,7 +32,7 @@ import android.util.Log;
 public class StopwatchService extends Service {
 
     private static final String TAG = "StopwatchService";
-    private static final String LIVE_CARD_ID = "stopwatch";
+    private static final String LIVE_CARD_TAG = "stopwatch";
 
     private ChronometerDrawer mCallback;
 
@@ -53,17 +54,17 @@ public class StopwatchService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (mLiveCard == null) {
             Log.d(TAG, "Publishing LiveCard");
-            mLiveCard = mTimelineManager.getLiveCard(LIVE_CARD_ID);
+            mLiveCard = mTimelineManager.createLiveCard(LIVE_CARD_TAG);
 
             // Keep track of the callback to remove it before unpublishing.
             mCallback = new ChronometerDrawer(this);
-            mLiveCard.enableDirectRendering(true).getSurfaceHolder().addCallback(mCallback);
-            mLiveCard.setNonSilent(true);
+            mLiveCard.setDirectRenderingEnabled(true).getSurfaceHolder().addCallback(mCallback);
 
             Intent menuIntent = new Intent(this, MenuActivity.class);
+            menuIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             mLiveCard.setAction(PendingIntent.getActivity(this, 0, menuIntent, 0));
 
-            mLiveCard.publish();
+            mLiveCard.publish(PublishMode.REVEAL);
             Log.d(TAG, "Done publishing LiveCard");
         } else {
             // TODO(alainv): Jump to the LiveCard when API is available.
