@@ -18,7 +18,6 @@ package com.google.android.glass.sample.stopwatch;
 
 import com.google.android.glass.timeline.LiveCard;
 import com.google.android.glass.timeline.LiveCard.PublishMode;
-import com.google.android.glass.timeline.TimelineManager;
 
 import android.app.PendingIntent;
 import android.app.Service;
@@ -31,19 +30,11 @@ import android.util.Log;
  */
 public class StopwatchService extends Service {
 
-    private static final String TAG = "StopwatchService";
     private static final String LIVE_CARD_TAG = "stopwatch";
 
     private ChronometerDrawer mCallback;
 
-    private TimelineManager mTimelineManager;
     private LiveCard mLiveCard;
-
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        mTimelineManager = TimelineManager.from(this);
-    }
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -53,8 +44,7 @@ public class StopwatchService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (mLiveCard == null) {
-            Log.d(TAG, "Publishing LiveCard");
-            mLiveCard = mTimelineManager.createLiveCard(LIVE_CARD_TAG);
+            mLiveCard = new LiveCard(this, LIVE_CARD_TAG);
 
             // Keep track of the callback to remove it before unpublishing.
             mCallback = new ChronometerDrawer(this);
@@ -63,11 +53,10 @@ public class StopwatchService extends Service {
             Intent menuIntent = new Intent(this, MenuActivity.class);
             menuIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             mLiveCard.setAction(PendingIntent.getActivity(this, 0, menuIntent, 0));
-
+            mLiveCard.attach(this);
             mLiveCard.publish(PublishMode.REVEAL);
-            Log.d(TAG, "Done publishing LiveCard");
         } else {
-            // TODO(alainv): Jump to the LiveCard when API is available.
+            mLiveCard.navigate();
         }
 
         return START_STICKY;
@@ -76,10 +65,6 @@ public class StopwatchService extends Service {
     @Override
     public void onDestroy() {
         if (mLiveCard != null && mLiveCard.isPublished()) {
-            Log.d(TAG, "Unpublishing LiveCard");
-            if (mCallback != null) {
-                mLiveCard.getSurfaceHolder().removeCallback(mCallback);
-            }
             mLiveCard.unpublish();
             mLiveCard = null;
         }

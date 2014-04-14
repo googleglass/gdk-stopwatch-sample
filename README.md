@@ -9,7 +9,7 @@ stopwatch. Tapping the live card presents a menu with one option:
 ## Getting started
 
 Check out our documentation to learn how to get started on
-https://developers.google.com/glass/develop/gdk
+https://developers.google.com/glass/gdk/index
 
 ## Running the sample on Glass
 

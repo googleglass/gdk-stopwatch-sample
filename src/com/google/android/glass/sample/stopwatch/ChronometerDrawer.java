@@ -16,94 +16,86 @@
 
 package com.google.android.glass.sample.stopwatch;
 
+import com.google.android.glass.timeline.DirectRenderingCallback;
+
 import android.content.Context;
 import android.graphics.Canvas;
-import android.media.AudioManager;
-import android.media.SoundPool;
 import android.os.SystemClock;
 import android.util.Log;
-import android.view.LayoutInflater;
 import android.view.SurfaceHolder;
 import android.view.View;
 
-import java.util.concurrent.TimeUnit;
-
 /**
- * SurfaceHolder.Callback used to draw the chronometer on the timeline LiveCard.
+ * {@link DirectRenderingCallback} used to draw the chronometer on the timeline {@link LiveCard}.
+ * Rendering requires that:
+ * <ol>
+ * <li>a {@link SurfaceHolder} has been created through monitoring the
+ *     {@link SurfaceHolder.Callback#onSurfaceCreated(SurfaceHolder)} and
+ *     {@link SurfaceHolder.Callback#onSurfaceDestroyed(SurfaceHolder)} callbacks.
+ * <li>rendering has not been paused (defaults to rendering) through monitoring the
+ *     {@link DirecRenderingCallback#renderingPaused(SurfaceHolder, boolean)} callback.
+ * </ol>
+ * As this class uses an inflated {@link View} to draw on the {@link SurfaceHolder}'s
+ * {@link Canvas}, monitoring the
+ * {@link SurfaceHolder.Callback#onSurfaceChanged(SurfaceHolder, int, int, int)} callback is also
+ * required to properly measure and layout the {@link View}'s dimension.
  */
-public class ChronometerDrawer implements SurfaceHolder.Callback {
-    private static final String TAG = "ChronometerDrawer";
+public class ChronometerDrawer implements DirectRenderingCallback {
 
-    private static final long SEC_TO_MILLIS = TimeUnit.SECONDS.toMillis(1);
-    private static final int SOUND_PRIORITY = 1;
-    private static final int MAX_STREAMS = 1;
+    private static final String TAG = ChronometerDrawer.class.getSimpleName();
     private static final int COUNT_DOWN_VALUE = 3;
-
-    private final SoundPool mSoundPool;
-    private final int mStartSoundId;
-    private final int mCountDownSoundId;
 
     private final CountDownView mCountDownView;
     private final ChronometerView mChronometerView;
 
-    private long mCurrentTimeSeconds;
-    private boolean mCountDownSoundPlayed;
-
     private SurfaceHolder mHolder;
     private boolean mCountDownDone;
+    private boolean mRenderingPaused;
 
-    public ChronometerDrawer(Context context) {
-        mCountDownView = new CountDownView(context);
-        mCountDownView.setCountDown(COUNT_DOWN_VALUE);
-        mCountDownView.setListener(new CountDownView.CountDownListener() {
+    private final CountDownView.Listener mCountDownListener = new CountDownView.Listener() {
 
-            @Override
-            public void onTick(long millisUntilFinish) {
-                maybePlaySound(millisUntilFinish);
+        @Override
+        public void onTick(long millisUntilFinish) {
+            if (mHolder != null) {
                 draw(mCountDownView);
             }
+        }
 
-            @Override
-            public void onFinish() {
-                mCountDownDone = true;
-                mChronometerView.setBaseMillis(SystemClock.elapsedRealtime());
-                if (mHolder != null) {
-                    mChronometerView.start();
-                }
-                playSound(mStartSoundId);
-            }
+        @Override
+        public void onFinish() {
+            mCountDownDone = true;
+            mChronometerView.setBaseMillis(SystemClock.elapsedRealtime());
+            updateRenderingState();
+        }
+    };
 
-            private void maybePlaySound(long millisUntilFinish) {
-                long currentTimeSeconds = TimeUnit.MILLISECONDS.toSeconds(millisUntilFinish);
-                long milliSecondsPart = millisUntilFinish % SEC_TO_MILLIS;
+    private final ChronometerView.Listener mChronometerListener = new ChronometerView.Listener() {
 
-                if (currentTimeSeconds != mCurrentTimeSeconds) {
-                    mCountDownSoundPlayed = false;
-                    mCurrentTimeSeconds = currentTimeSeconds;
-                }
-                if (!mCountDownSoundPlayed
-                    && (milliSecondsPart <= CountDownView.ANIMATION_DURATION_IN_MILLIS)) {
-                    playSound(mCountDownSoundId);
-                    mCountDownSoundPlayed = true;
-                }
-            }
-        });
-
-        mChronometerView = new ChronometerView(context);
-        mChronometerView.setListener(new ChronometerView.ChangeListener() {
-
-            @Override
-            public void onChange() {
+        @Override
+        public void onChange() {
+            if (mHolder != null) {
                 draw(mChronometerView);
             }
-        });
-        mChronometerView.setForceStart(true);
+        }
+    };
 
-        mSoundPool = new SoundPool(MAX_STREAMS, AudioManager.STREAM_MUSIC, 0);
-        mStartSoundId = mSoundPool.load(context, R.raw.start, SOUND_PRIORITY);
-        mCountDownSoundId = mSoundPool.load(context, R.raw.countdown_bip, SOUND_PRIORITY);
+    public ChronometerDrawer(Context context) {
+        this(new CountDownView(context), new ChronometerView(context));
     }
 
+    public ChronometerDrawer(CountDownView countDownView, ChronometerView chronometerView) {
+        mCountDownView = countDownView;
+        mCountDownView.setCountDown(COUNT_DOWN_VALUE);
+        mCountDownView.setListener(mCountDownListener);
+
+        mChronometerView = chronometerView;
+        mChronometerView.setListener(mChronometerListener);
+    }
+
+    /**
+     * Uses the provided {@code width} and {@code height} to measure and layout the inflated
+     * {@link CountDownView} and {@link ChronometerView}.
+     */
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
         // Measure and layout the view with the canvas dimensions.
@@ -119,22 +111,48 @@ public class ChronometerDrawer implements SurfaceHolder.Callback {
                 0, 0, mChronometerView.getMeasuredWidth(), mChronometerView.getMeasuredHeight());
     }
 
+    /**
+     * Keeps the created {@link SurfaceHolder} and updates this class' rendering state.
+     */
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
-        Log.d(TAG, "Surface created");
+        // The creation of a new Surface implicitly resumes the rendering.
+        mRenderingPaused = false;
         mHolder = holder;
-        if (mCountDownDone) {
-            mChronometerView.start();
-        } else {
-            mCountDownView.start();
-        }
+        updateRenderingState();
     }
 
+    /**
+     * Removes the {@link SurfaceHolder} used for drawing and stops rendering.
+     */
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
-        Log.d(TAG, "Surface destroyed");
-        mChronometerView.stop();
         mHolder = null;
+        updateRenderingState();
+    }
+
+    /**
+     * Updates this class' rendering state according to the provided {@code paused} flag.
+     */
+    @Override
+    public void renderingPaused(SurfaceHolder holder, boolean paused) {
+        mRenderingPaused = paused;
+        updateRenderingState();
+    }
+
+    /**
+     * Starts or stops rendering according to the {@link LiveCard}'s state.
+     */
+    private void updateRenderingState() {
+        if (mHolder != null && !mRenderingPaused) {
+            if (mCountDownDone) {
+                mChronometerView.start();
+            } else {
+                mCountDownView.start();
+            }
+        } else {
+            mChronometerView.stop();
+        }
     }
 
     /**
@@ -145,23 +163,12 @@ public class ChronometerDrawer implements SurfaceHolder.Callback {
         try {
             canvas = mHolder.lockCanvas();
         } catch (Exception e) {
+            Log.e(TAG, "Unable to lock canvas: " + e);
             return;
         }
         if (canvas != null) {
             view.draw(canvas);
             mHolder.unlockCanvasAndPost(canvas);
         }
-    }
-
-    /**
-     * Plays the provided {@code soundId}.
-     */
-    private void playSound(int soundId) {
-        mSoundPool.play(soundId,
-                        1 /* leftVolume */,
-                        1 /* rightVolume */,
-                        SOUND_PRIORITY,
-                        0 /* loop */,
-                        1 /* rate */);
     }
 }

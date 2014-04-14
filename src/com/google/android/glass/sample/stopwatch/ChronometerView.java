@@ -36,17 +36,29 @@ public class ChronometerView extends FrameLayout {
     /**
      * Interface to listen for changes on the view layout.
      */
-    public interface ChangeListener {
+    public interface Listener {
         /** Notified of a change in the view. */
         public void onChange();
     }
 
-    // About 24 FPS.
-    private static final long DELAY_MILLIS = 41;
+    /** About 24 FPS, visible for testing. */
+    static final long DELAY_MILLIS = 41;
 
-    private final TextView mMinuteView;
-    private final TextView mSecondView;
-    private final TextView mCentiSecondView;
+    private final TextView mMinutesView;
+    private final TextView mSecondsView;
+    private final TextView mCentiSecondsView;
+
+    private final Handler mHandler = new Handler();
+    private final Runnable mUpdateTextRunnable = new Runnable() {
+
+        @Override
+        public void run() {
+            if (mRunning) {
+                updateText();
+                postDelayed(mUpdateTextRunnable, DELAY_MILLIS);
+            }
+        }
+    };
 
     private boolean mStarted;
     private boolean mForceStart;
@@ -55,7 +67,7 @@ public class ChronometerView extends FrameLayout {
 
     private long mBaseMillis;
 
-    private ChangeListener mChangeListener;
+    private Listener mChangeListener;
 
     public ChronometerView(Context context) {
         this(context, null, 0);
@@ -69,15 +81,15 @@ public class ChronometerView extends FrameLayout {
         super(context, attrs, style);
         LayoutInflater.from(context).inflate(R.layout.card_chronometer, this);
 
-        mMinuteView = (TextView) findViewById(R.id.minute);
-        mSecondView = (TextView) findViewById(R.id.second);
-        mCentiSecondView = (TextView) findViewById(R.id.centi_second);
+        mMinutesView = (TextView) findViewById(R.id.minute);
+        mSecondsView = (TextView) findViewById(R.id.second);
+        mCentiSecondsView = (TextView) findViewById(R.id.centi_second);
 
-        setBaseMillis(SystemClock.elapsedRealtime());
+        setBaseMillis(getElapsedRealtime());
     }
 
     /**
-     * Set the base value of the chronometer in milliseconds.
+     * Sets the base value of the chronometer in milliseconds.
      */
     public void setBaseMillis(long baseMillis) {
         mBaseMillis = baseMillis;
@@ -85,99 +97,77 @@ public class ChronometerView extends FrameLayout {
     }
 
     /**
-     * Get the base value of the chronometer in milliseconds.
+     * Gets the base value of the chronometer in milliseconds.
      */
     public long getBaseMillis() {
         return mBaseMillis;
     }
 
     /**
-     * Set a {@link ChangeListener}.
+     * Sets a {@link Listener}.
      */
-    public void setListener(ChangeListener listener) {
+    public void setListener(Listener listener) {
         mChangeListener = listener;
     }
 
     /**
-     * Set whether or not to force the start of the chronometer when a window has not been attached
-     * to the view.
+     * Returns the set {@link Listener}.
      */
-    public void setForceStart(boolean forceStart) {
-        mForceStart = forceStart;
-        updateRunning();
+    public Listener getListener() {
+        return mChangeListener;
     }
 
     /**
-     * Start the chronometer.
+     * Starts the chronometer.
      */
     public void start() {
-        mStarted = true;
-        updateRunning();
+        if (!mRunning) {
+            postDelayed(mUpdateTextRunnable, DELAY_MILLIS);
+        }
+        mRunning = true;
     }
 
     /**
-     * Stop the chronometer.
+     * Stops the chronometer.
      */
     public void stop() {
-        mStarted = false;
-        updateRunning();
+        if (mRunning) {
+            removeCallbacks(mUpdateTextRunnable);
+        }
+        mRunning = false;
     }
 
     @Override
-    protected void onDetachedFromWindow() {
-        super.onDetachedFromWindow();
-        mVisible = false;
-        updateRunning();
+    public boolean postDelayed(Runnable action, long delayMillis) {
+        return mHandler.postDelayed(action, delayMillis);
     }
 
     @Override
-    protected void onWindowVisibilityChanged(int visibility) {
-        super.onWindowVisibilityChanged(visibility);
-        mVisible = (visibility == VISIBLE);
-        updateRunning();
-    }
-
-
-    private final Handler mHandler = new Handler();
-
-    private final Runnable mUpdateTextRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (mRunning) {
-                updateText();
-                mHandler.postDelayed(mUpdateTextRunnable, DELAY_MILLIS);
-            }
-        }
-    };
-
-    /**
-     * Update the running state of the chronometer.
-     */
-    private void updateRunning() {
-        boolean running = (mVisible || mForceStart) && mStarted;
-        if (running != mRunning) {
-            if (running) {
-                mHandler.post(mUpdateTextRunnable);
-            } else {
-                mHandler.removeCallbacks(mUpdateTextRunnable);
-            }
-            mRunning = running;
-        }
+    public boolean removeCallbacks(Runnable action) {
+        mHandler.removeCallbacks(action);
+        return true;
     }
 
     /**
-     * Update the value of the chronometer.
+     * Returns {@link SystemClock.elapsedRealtime}, overridable for testing.
      */
-    private void updateText() {
-        long millis = SystemClock.elapsedRealtime() - mBaseMillis;
+    protected long getElapsedRealtime() {
+        return SystemClock.elapsedRealtime();
+    }
+
+    /**
+     * Updates the value of the chronometer, visible for testing.
+     */
+    void updateText() {
+        long millis = getElapsedRealtime() - mBaseMillis;
         // Cap chronometer to one hour.
         millis %= TimeUnit.HOURS.toMillis(1);
 
-        mMinuteView.setText(String.format("%02d", TimeUnit.MILLISECONDS.toMinutes(millis)));
+        mMinutesView.setText(String.format("%02d", TimeUnit.MILLISECONDS.toMinutes(millis)));
         millis %= TimeUnit.MINUTES.toMillis(1);
-        mSecondView.setText(String.format("%02d", TimeUnit.MILLISECONDS.toSeconds(millis)));
+        mSecondsView.setText(String.format("%02d", TimeUnit.MILLISECONDS.toSeconds(millis)));
         millis = (millis % TimeUnit.SECONDS.toMillis(1)) / 10;
-        mCentiSecondView.setText(String.format("%02d", millis));
+        mCentiSecondsView.setText(String.format("%02d", millis));
         if (mChangeListener != null) {
             mChangeListener.onChange();
         }

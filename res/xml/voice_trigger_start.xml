@@ -14,4 +14,4 @@
      limitations under the License.
 -->
 
-<trigger keyword="@string/start_stopwatch" />
+<trigger command="START_A_STOPWATCH" />

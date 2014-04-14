@@ -19,23 +19,23 @@ package com.google.android.glass.sample.stopwatch;
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 
+import java.lang.Runnable;
+
 /**
- * Activity showing the options menu.
+ * Activity showing the stopwatch options menu.
  */
 public class MenuActivity extends Activity {
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-    }
+    private final Handler mHandler = new Handler();
 
     @Override
-    public void onResume() {
-        super.onResume();
+    public void onAttachedToWindow() {
+        super.onAttachedToWindow();
         openOptionsMenu();
     }
 
@@ -51,7 +51,16 @@ public class MenuActivity extends Activity {
         // Handle item selection.
         switch (item.getItemId()) {
             case R.id.stop:
-                stopService(new Intent(this, StopwatchService.class));
+                // Stop the service at the end of the message queue for proper options menu
+                // animation. This is only needed when starting a new Activity or stopping a Service
+                // that published a LiveCard.
+                post(new Runnable() {
+
+                    @Override
+                    public void run() {
+                        stopService(new Intent(MenuActivity.this, StopwatchService.class));
+                    }
+                });
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
@@ -63,4 +72,12 @@ public class MenuActivity extends Activity {
         // Nothing else to do, closing the Activity.
         finish();
     }
+
+    /**
+     * Posts a {@link Runnable} at the end of the message loop, overridable for testing.
+     */
+    protected void post(Runnable runnable) {
+        mHandler.post(runnable);
+    }
+
 }

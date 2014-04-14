@@ -17,6 +17,8 @@
 package com.google.android.glass.sample.stopwatch;
 
 import android.content.Context;
+import android.media.AudioManager;
+import android.media.SoundPool;
 import android.os.Handler;
 import android.os.SystemClock;
 import android.util.AttributeSet;
@@ -24,7 +26,6 @@ import android.view.LayoutInflater;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
-import java.lang.Long;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -37,12 +38,11 @@ import java.util.concurrent.TimeUnit;
  * At each second change, update the TextView text.
  */
 public class CountDownView extends FrameLayout {
-    private static final String TAG = "CountDownView";
 
     /**
      * Interface to listen for changes in the countdown.
      */
-    public interface CountDownListener {
+    public interface Listener {
         /**
          * Notified of a tick, indicating a layout change.
          */
@@ -56,18 +56,39 @@ public class CountDownView extends FrameLayout {
 
     /** Time delimiter specifying when the second component is fully shown. */
     public static final float ANIMATION_DURATION_IN_MILLIS = 850.0f;
+    private static final long DELAY_MILLIS = 40;
 
-    // About 24 FPS.
-    private static final long DELAY_MILLIS = 41;
-    private static final int MAX_TRANSLATION_Y = 30;
-    private static final float ALPHA_DELIMITER = 0.95f;
-    private static final long SEC_TO_MILLIS = TimeUnit.SECONDS.toMillis(1);
+    private static final int SOUND_PRIORITY = 1;
+    private static final int MAX_STREAMS = 1;
+
+    // Constants visible for testing.
+    static final int MAX_TRANSLATION_Y = 30;
+    static final float ALPHA_DELIMITER = 0.95f;
+    static final long SEC_TO_MILLIS = TimeUnit.SECONDS.toMillis(1);
+
+    // Sounds ID visible for testing.
+    final int mFinishSoundId;
+    final int mCountDownSoundId;
 
     private final TextView mSecondsView;
 
+    private final SoundPool mSoundPool;
+
+    private final Handler mHandler = new Handler();
+    private final Runnable mUpdateViewRunnable = new Runnable() {
+
+        @Override
+        public void run() {
+            if (!updateView()) {
+                postDelayed(mUpdateViewRunnable, DELAY_MILLIS);
+            }
+        }
+    };
+
     private long mTimeSeconds;
+    private long mCurrentTimeSeconds;
     private long mStopTimeInFuture;
-    private CountDownListener mListener;
+    private Listener mListener;
     private boolean mStarted;
 
     public CountDownView(Context context) {
@@ -81,8 +102,11 @@ public class CountDownView extends FrameLayout {
     public CountDownView(Context context, AttributeSet attrs, int style) {
         super(context, attrs, style);
         LayoutInflater.from(context).inflate(R.layout.card_countdown, this);
+        mSecondsView = (TextView) findViewById(R.id.seconds);
 
-        mSecondsView =  (TextView) findViewById(R.id.seconds_view);
+        mSoundPool = new SoundPool(MAX_STREAMS, AudioManager.STREAM_MUSIC, 0);
+        mFinishSoundId = mSoundPool.load(context, R.raw.start, SOUND_PRIORITY);
+        mCountDownSoundId = mSoundPool.load(context, R.raw.countdown_bip, SOUND_PRIORITY);
     }
 
     public void setCountDown(long timeSeconds) {
@@ -94,53 +118,90 @@ public class CountDownView extends FrameLayout {
     }
 
     /**
-     * Set a {@link CountDownListener}.
+     * Sets a {@link Listener}.
      */
-    public void setListener(CountDownListener listener) {
+    public void setListener(Listener listener) {
         mListener = listener;
     }
 
-    private final Handler mHandler = new Handler();
+    /**
+     * Returns the set {@link Listener}.
+     */
+    public Listener getListener() {
+        return mListener;
+    }
 
-    private final Runnable mUpdateViewRunnable = new Runnable() {
-        @Override
-        public void run() {
-            final long millisLeft = mStopTimeInFuture - SystemClock.elapsedRealtime();
-
-            // Count down is done.
-            if (millisLeft <= 0) {
-                mStarted = false;
-                if (mListener != null) {
-                    mListener.onFinish();
-                }
-            } else {
-                updateView(millisLeft);
-                if (mListener != null) {
-                    mListener.onTick(millisLeft);
-                }
-                mHandler.postDelayed(mUpdateViewRunnable, DELAY_MILLIS);
-            }
-        }
-    };
+    @Override
+    public boolean postDelayed(Runnable action, long delayMillis) {
+        return mHandler.postDelayed(action, delayMillis);
+    }
 
     /**
      * Starts the countdown animation if not yet started.
      */
     public void start() {
         if (!mStarted) {
-            mStopTimeInFuture =
-                    TimeUnit.SECONDS.toMillis(mTimeSeconds) + SystemClock.elapsedRealtime();
+            mCurrentTimeSeconds = 0;
+            mStopTimeInFuture = TimeUnit.SECONDS.toMillis(mTimeSeconds) + getElapsedRealtime();
             mStarted = true;
-            mHandler.postDelayed(mUpdateViewRunnable, DELAY_MILLIS);
+            postDelayed(mUpdateViewRunnable, 0);
         }
     }
 
     /**
-     * Updates the views to reflect the current state of animation.
+     * Returns {@link SystemClock.elapsedRealtime}, overridable for testing.
+     */
+    protected long getElapsedRealtime() {
+        return SystemClock.elapsedRealtime();
+    }
+
+    /**
+     * Plays the provided {@code soundId}, overridable for testing.
+     */
+    protected void playSound(int soundId) {
+        mSoundPool.play(soundId,
+                        1 /* leftVolume */,
+                        1 /* rightVolume */,
+                        SOUND_PRIORITY,
+                        0 /* loop */,
+                        1 /* rate */);
+    }
+
+    /**
+     * Updates the view to reflect the current state of animation, visible for testing.
+     *
+     * @return whether or not the count down is finished.
+     */
+    boolean updateView() {
+        long millisLeft = mStopTimeInFuture - getElapsedRealtime();
+        long currentTimeSeconds = TimeUnit.MILLISECONDS.toSeconds(millisLeft);
+        boolean countDownDone = millisLeft <= 0;
+
+        if (countDownDone) {
+            mStarted = false;
+            if (mListener != null) {
+                mListener.onFinish();
+            }
+            playSound(mFinishSoundId);
+        } else {
+            updateView(millisLeft);
+            if (mListener != null) {
+                mListener.onTick(millisLeft);
+            }
+            if (mCurrentTimeSeconds != currentTimeSeconds) {
+                playSound(mCountDownSoundId);
+                mCurrentTimeSeconds = currentTimeSeconds;
+            }
+        }
+        return countDownDone;
+    }
+
+    /**
+     * Updates the view to reflect the current state of animation, visible for testing.
      *
      * @params millisUntilFinish milliseconds until the countdown is done
      */
-    private void updateView(long millisUntilFinish) {
+    void updateView(long millisUntilFinish) {
         long currentTimeSeconds = TimeUnit.MILLISECONDS.toSeconds(millisUntilFinish) + 1;
         long frame = SEC_TO_MILLIS - (millisUntilFinish % SEC_TO_MILLIS);
 
@@ -154,6 +215,4 @@ public class CountDownView extends FrameLayout {
             mSecondsView.setAlpha(ALPHA_DELIMITER + factor * (1 - ALPHA_DELIMITER));
         }
     }
-
-
 }
