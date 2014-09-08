@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright (C) 2014 The Android Open Source Project
+<?xml version="1.0" encoding="UTF-8"?>
+<!--  Copyright (C) 2013 The Android Open Source Project
 
      Licensed under the Apache License, Version 2.0 (the "License");
      you may not use this file except in compliance with the License.
@@ -12,17 +12,10 @@
      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
      See the License for the specific language governing permissions and
      limitations under the License.
--->
+ -->
 
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.google.android.glass.sample.stopwatch.tests">
-
-    <application>
-        <uses-library android:name="android.test.runner" />
-    </application>
-
-    <instrumentation android:name="android.test.InstrumentationTestRunner"
-        android:targetPackage="com.google.android.glass.sample.stopwatch"
-        android:label="Test for Stopwatch Glassware." />
-
-</manifest>
+<resources xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="app_name" msgid="4507376042707401210">"Stopwatch"</string>
+    <string name="stop" msgid="5007574247561851274">"Stop"</string>
+</resources>

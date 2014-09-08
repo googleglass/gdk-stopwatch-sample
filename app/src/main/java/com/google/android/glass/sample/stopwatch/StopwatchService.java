@@ -59,7 +59,10 @@ public class StopwatchService extends Service {
             mLiveCard.navigate();
         }
 
-        return START_STICKY;
+        // Return START_NOT_STICKY to prevent the system from restarting the service if it is killed
+        // (e.g., due to an error). It doesn't make sense to restart automatically because the
+        // stopwatch state will have been lost.
+        return START_NOT_STICKY;
     }
 
     @Override

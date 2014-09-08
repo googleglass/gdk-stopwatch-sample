@@ -15,6 +15,9 @@
 -->
 
 <resources>
-    <string name="app_name">StopWatch</string>
+    <!-- Glassware name for Stopwatch Timer. The name could appear in the disambiguation menu.
+         [CHAR LIMIT=30] -->
+    <string name="app_name">Stopwatch</string>
+    <!-- Menu item to stop the stopwatch and remove its LiveCard. [CHAR LIMIT=15] -->
     <string name="stop">Stop</string>
 </resources>
